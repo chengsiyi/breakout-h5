@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>H5弹球打砖块 · 草图版</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #0f172a; display: flex; justify-content: center; align-items: center; min-height: 100vh; font-family: "Segoe UI", sans-serif; overflow: hidden; }
+    #gameCanvas { border: 2px solid #334155; border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); }
+    .overlay {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      display: flex; flex-direction: column; justify-content: center; align-items: center;
+      color: white; text-align: center; pointer-events: none;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.7);
+    }
+    .overlay h1 { font-size: 2.2rem; margin-bottom: 1rem; color: #60a5fa; }
+    .overlay p { font-size: 1.1rem; opacity: 0.9; max-width: 80%; }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas" width="800" height="600"></canvas>
+  <div id="startScreen" class="overlay">
+    <h1>🎯 弹球打砖块</h1>
+    <p>移动鼠标控制挡板<br>点击或触屏开始游戏</p>
+  </div>
+  <div id="winScreen" class="overlay" style="display:none;">
+    <h1>🎉 恭喜通关！</h1>
+    <p>所有砖块已清除！</p>
+  </div>
+  <div id="loseScreen" class="overlay" style="display:none;">
+    <h1>💥 游戏结束</h1>
+    <p>球掉落了… 再试一次？</p>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const startScreen = document.getElementById('startScreen');
+    const winScreen = document.getElementById('winScreen');
+    const loseScreen = document.getElementById('loseScreen');
+
+    // Game state
+    let gameState = 'start'; // 'start', 'playing', 'won', 'lost'
+    let score = 0;
+    const BRICK_ROWS = 5;
+    const BRICK_COLS = 8;
+    const BRICK_WIDTH = 75;
+    const BRICK_HEIGHT = 20;
+    const BRICK_GAP = 10;
+    const BRICK_OFFSET_TOP = 60;
+    const BRICK_OFFSET_LEFT = 30;
+
+    // Paddle
+    const paddle = {
+      x: canvas.width / 2 - 75,
+      y: canvas.height - 30,
+      width: 150,
+      height: 12,
+      dx: 0
+    };
+
+    // Ball
+    const ball = {
+      x: canvas.width / 2,
+      y: canvas.height / 2,
+      radius: 8,
+      speed: 5,
+      dx: 4,
+      dy: -4
+    };
+
+    // Bricks
+    const bricks = [];
+    for (let r = 0; r < BRICK_ROWS; r++) {
+      bricks[r] = [];
+      for (let c = 0; c < BRICK_COLS; c++) {
+        bricks[r][c] = { x: 0, y: 0, status: 1 };
+      }
+    }
+
+    // Initialize brick positions
+    function initBricks() {
+      for (let r = 0; r < BRICK_ROWS; r++) {
+        for (let c = 0; c < BRICK_COLS; c++) {
+          bricks[r][c].x = c * (BRICK_WIDTH + BRICK_GAP) + BRICK_OFFSET_LEFT;
+          bricks[r][c].y = r * (BRICK_HEIGHT + BRICK_GAP) + BRICK_OFFSET_TOP;
+        }
+      }
+    }
+
+    // Draw functions
+    function drawPaddle() {
+      ctx.fillStyle = '#60a5fa';
+      ctx.fillRect(paddle.x, paddle.y, paddle.width, paddle.height);
+      ctx.strokeStyle = '#3b82f6';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(paddle.x, paddle.y, paddle.width, paddle.height);
+    }
+
+    function drawBall() {
+      ctx.beginPath();
+      ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+      ctx.fillStyle = '#fbbf24';
+      ctx.fill();
+      ctx.closePath();
+    }
+
+    function drawBricks() {
+      const colors = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#60a5fa'];
+      for (let r = 0; r < BRICK_ROWS; r++) {
+        for (let c = 0; c < BRICK_COLS; c++) {
+          if (bricks[r][c].status === 1) {
+            ctx.fillStyle = colors[r % colors.length];
+            ctx.fillRect(
+              bricks[r][c].x,
+              bricks[r][c].y,
+              BRICK_WIDTH,
+              BRICK_HEIGHT
+            );
+            ctx.strokeStyle = '#1e293b';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(
+              bricks[r][c].x,
+              bricks[r][c].y,
+              BRICK_WIDTH,
+              BRICK_HEIGHT
+            );
+          }
+        }
+      }
+    }
+
+    function drawScore() {
+      ctx.font = '16px sans-serif';
+      ctx.fillStyle = 'white';
+      ctx.fillText(`分数: ${score}`, 20, 30);
+    }
+
+    // Collision detection
+    function collisionDetection() {
+      for (let r = 0; r < BRICK_ROWS; r++) {
+        for (let c = 0; c < BRICK_COLS; c++) {
+          const b = bricks[r][c];
+          if (b.status === 1) {
+            if (
+              ball.x + ball.radius > b.x &&
+              ball.x - ball.radius < b.x + BRICK_WIDTH &&
+              ball.y + ball.radius > b.y &&
+              ball.y - ball.radius < b.y + BRICK_HEIGHT
+            ) {
+              ball.dy = -ball.dy;
+              b.status = 0;
+              score += 10;
+              // Check win
+              if (score === BRICK_ROWS * BRICK_COLS * 10) {
+                gameState = 'won';
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Update positions
+    function update() {
+      if (gameState === 'playing') {
+        // Ball movement
+        ball.x += ball.dx;
+        ball.y += ball.dy;
+
+        // Wall collisions (left/right/top)
+        if (ball.x + ball.radius > canvas.width || ball.x - ball.radius < 0) {
+          ball.dx = -ball.dx;
+        }
+        if (ball.y - ball.radius < 0) {
+          ball.dy = -ball.dy;
+        }
+        if (ball.y + ball.radius > canvas.height) {
+          gameState = 'lost';
+        }
+
+        // Paddle collision
+        if (
+          ball.y + ball.radius > paddle.y &&
+          ball.y - ball.radius < paddle.y + paddle.height &&
+          ball.x > paddle.x &&
+          ball.x < paddle.x + paddle.width
+        ) {
+          // Angle depends on where ball hits paddle (center → straight up, sides → angled)
+          const hitPos = (ball.x - (paddle.x + paddle.width / 2)) / (paddle.width / 2); // -1 to +1
+          ball.dx = hitPos * 5; // scale horizontal velocity
+          ball.dy = -Math.abs(ball.dy); // always bounce upward
+        }
+      }
+    }
+
+    // Input handling
+    canvas.addEventListener('mousemove', (e) => {
+      if (gameState === 'playing') {
+        const rect = canvas.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        paddle.x = Math.max(0, Math.min(canvas.width - paddle.width, mouseX - paddle.width / 2));
+      }
+    });
+
+    canvas.addEventListener('touchmove', (e) => {
+      e.preventDefault();
+      if (gameState === 'playing') {
+        const rect = canvas.getBoundingClientRect();
+        const touchX = e.touches[0].clientX - rect.left;
+        paddle.x = Math.max(0, Math.min(canvas.width - paddle.width, touchX - paddle.width / 2));
+      }
+    });
+
+    canvas.addEventListener('click', () => {
+      if (gameState === 'start') {
+        gameState = 'playing';
+        startScreen.style.display = 'none';
+      } else if (gameState === 'won' || gameState === 'lost') {
+        resetGame();
+      }
+    });
+
+    function resetGame() {
+      score = 0;
+      ball.x = canvas.width / 2;
+      ball.y = canvas.height / 2;
+      ball.dx = 4;
+      ball.dy = -4;
+      paddle.x = canvas.width / 2 - 75;
+      initBricks();
+      gameState = 'playing';
+      winScreen.style.display = 'none';
+      loseScreen.style.display = 'none';
+    }
+
+    // Main render loop
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      if (gameState === 'start') return;
+      if (gameState === 'won') winScreen.style.display = 'flex';
+      if (gameState === 'lost') loseScreen.style.display = 'flex';
+
+      drawBricks();
+      drawPaddle();
+      drawBall();
+      drawScore();
+    }
+
+    // Game loop
+    function gameLoop() {
+      update();
+      draw();
+      requestAnimationFrame(gameLoop);
+    }
+
+    // Init & start
+    initBricks();
+    gameLoop();
+
+    // Handle resize (responsive)
+    window.addEventListener('resize', () => {
+      const scale = Math.min(window.innerWidth / 800, window.innerHeight / 600, 1);
+      canvas.style.transform = `scale(${scale})`;
+      canvas.style.transformOrigin = 'top left';
+    });
+  </script>
+</body>
+</html>
